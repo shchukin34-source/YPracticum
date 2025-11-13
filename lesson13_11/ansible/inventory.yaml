@@ -1,0 +1,30 @@
+---
+linux:  # Группа хостов
+  children:  # Обозначение, что будет подгруппа хостов
+    mediawiki:  # Имя подгруппы хостов
+      hosts:  # Узлы группы
+        vm_1:  # Имя машины
+          ansible_host: 158.160.123.112
+          your_variable: test
+        vm_2:
+          ansible_host: 158.160.108.150
+          your_variable: nginx
+    postgresql_servers:
+      hosts:
+        vm_3:
+          ansible_host: 158.160.103.63
+          your_variable: zabbix
+        vm_4:
+          ansible_host: 46.21.245.242
+          your_variable: postgres1
+        vm_5:
+          ansible_host: 158.160.112.135
+          your_variable: postgres2
+        vm_6:
+          ansible_host: 158.160.112.149
+          your_variable: postgres3
+  vars:  # Переменные, доступные или используемые для всех подгрупп
+    ansible_user: "ubuntu"
+      #    ansible_password: "qwerty"
+    connection_protocol: ssh  # тип подключения
+    ansible_become: true  # Становиться ли другим пользователем после подключения

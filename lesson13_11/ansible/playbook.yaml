@@ -1,0 +1,17 @@
+---
+- name: Update and upgrade packages on the system
+  hosts: all
+  become: true
+  tasks:
+    - name: Run apt update
+      ansible.builtin.apt:
+        update_cache: yes
+
+- name: Install PostgreSQL
+  hosts: postgresql_servers
+  tasks:
+    - name: Ensure PostgreSQL is installed
+      ansible.builtin.package:
+        name: postgresql
+        state: present
+
