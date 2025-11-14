@@ -7,7 +7,21 @@
       ansible.builtin.apt:
         update_cache: yes
 
-
+- name: установка nginx и сопутствующих пакетов
+  hosts: vm_2, vm_4, vm_5, vm_6
+  tasks:
+    - name: Ensure packets is installed
+      ansible.builtin.package:
+        name:
+          - nginx
+          - php-fpm
+          - php-pgsql
+          - php-intl
+          - php-gd
+          - php-xml
+          - php-mbstring
+        state: present
+        
 - name: установка nginx
   hosts: vm_2, vm_4, vm_5, vm_6
   tasks:
