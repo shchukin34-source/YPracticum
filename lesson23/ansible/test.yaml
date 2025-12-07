@@ -1,0 +1,23 @@
+---
+- name: Copy script and add to crontab
+  hosts: vm_3
+  vars:
+    script_name: backup_script.sh
+    cron_schedule: "0 0 * * *"  # Каждый день в 0:00
+  tasks:
+    - name: Copy script from localhost to vm_3
+      ansible.builtin.copy:
+        src: "/home/shukinyure/ansible/{{ script_name }}"
+        dest: "/var/tmp/{{ script_name }}"
+        mode: '0755'
+
+    - name: Add script to crontab
+      cron:
+        name: "Run script every day"
+        minute: "{{ cron_schedule.split(' ')[0] }}"
+        hour: "{{ cron_schedule.split(' ')[1] }}"
+        day: "{{ cron_schedule.split(' ')[2] }}"
+        month: "{{ cron_schedule.split(' ')[3] }}"
+        weekday: "{{ cron_schedule.split(' ')[4] }}"
+        job: "/var/tmp/{{ script_name }}"
+

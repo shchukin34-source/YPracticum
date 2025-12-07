@@ -1,0 +1,36 @@
+---
+- name: Backup PostgreSQL database on vm_5
+  hosts: vm_5
+  tasks:
+    - name: Ensure directory exists
+      file:
+        path: /home/ubuntu/
+        state: directory
+        mode: '0755'
+
+    - name: Dump PostgreSQL database
+      become: true
+      community.postgresql.postgresql_db:
+        name: my_wiki
+        state: dump
+        target: /home/ubuntu/mywikidump.sql
+        login_user: wikiuser
+        login_password: 35795147
+
+- name: Transfer file from vm_5 to localhost
+  hosts: vm_5
+  tasks:
+    - name: Fetch file
+      fetch:
+        src: /home/ubuntu/mywikidump.sql
+        dest: /tmp/
+
+- name: Copy file to localhost
+  hosts: localhost
+  vars:
+    ansible_remote_src: yes
+  tasks:
+    - name: Copy fetched file
+      copy:
+        src: /tmp/vm_5/home/ubuntu/mywikidump.sql
+        dest: /home/shukinyure/
