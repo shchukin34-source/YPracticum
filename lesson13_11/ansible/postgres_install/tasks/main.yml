@@ -1,8 +1,0 @@
----
-# tasks file for postgres_install
-- name : Установка postgres
-  apt:
-    name: postgresql
-    state: present
-  when: "'vm_4' 'vm_5' 'vm_6' in inventory_hostname"
-  notify: "Postgresql Reloader"  
