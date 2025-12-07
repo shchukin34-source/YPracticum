@@ -1,9 +1,0 @@
-#---
-#- name: Install the package "nginx"
-#  ansible.builtin.apt:
-#    name: nginx
-#  when: inventory_hostname in ['vm_2', 'vm_4', 'vm_5', 'vm_6']
-#
-#- name: Debug inventory_hostname
-#  ansible.builtin.debug:
-#    var: inventory_hostname
