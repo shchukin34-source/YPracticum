@@ -1,0 +1,406 @@
+---
+- name: Disable unattended upgrades
+  hosts: all
+  become: true
+  tasks:
+    - name: Disable and stop unattended-upgrades service
+      ansible.builtin.service:
+        name: unattended-upgrades
+        state: stopped
+        enabled: no
+
+- name: Update and upgrade packages on the system
+  hosts: all
+  become: true
+  tasks:
+    - name: Run apt update
+      ansible.builtin.apt:
+        update_cache: yes
+
+- name: установка nginx и сопутствующих пакетов
+  hosts: vm_1, vm_3, vm_4
+  tasks:
+    - name: Ensure packets is installed
+      ansible.builtin.package:
+        name:
+          - nginx
+          - php-fpm
+          - php-pgsql
+          - php-intl
+          - php-gd
+          - php-xml
+          - php-mbstring
+          - libpq-dev
+          - python3-pip
+          - acl
+          - tcpflow
+        state: present
+
+- name: Install postgresql-client-14
+  hosts: vm_3, vm_4
+  tasks:
+    - name: Ensure PostgreSQL is installed
+      ansible.builtin.package:
+        name: postgresql-client-14 
+        state: present
+
+- name: Install PostgreSQL
+  hosts: vm_5, vm_6
+  tasks:
+    - name: Ensure PostgreSQL is installed
+      ansible.builtin.package:
+        name: postgresql
+        state: present
+
+- name: Install python3-pip, ACL
+  hosts: vm_5
+  tasks:
+    - name: Ensure PostgreSQL is installed
+      ansible.builtin.package:
+        name:
+          - python3-pip
+          - acl
+        state: present
+
+- name: Перезапустить PostgreSQL
+  hosts: vm_5 
+  become: true
+  tasks:
+    - name: Перезапуск PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+- name: Установка главной PG and user PG
+  hosts: vm_5
+  become: true
+  vars:
+    db_user: wikiuser
+    db_password: 35795147
+    db_name: my_wiki
+  tasks:
+    - name: Utility present
+      ansible.builtin.package:
+        name: python3-psycopg2
+        state: present
+
+    - name: Create db user
+      community.postgresql.postgresql_user:
+        state: present
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        role_attr_flags: "NOSUPERUSER,NOCREATEDB,LOGIN"
+      become: true
+      become_user: postgres
+
+    - name: Create db
+      community.postgresql.postgresql_db:
+        state: present
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+      become: true
+      become_user: postgres
+
+- name: Замена postgresql.conf
+  hosts: vm_5
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/postgresql.conf
+        dest: /etc/postgresql/14/main/postgresql.conf
+
+- name: Замена pg_hba.conf
+  hosts: vm_5 
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/pg_hba.conf
+        dest: /etc/postgresql/14/main/pg_hba.conf
+
+- name: Перезапустить PostgreSQL
+  hosts: vm_5 
+  become: true
+  tasks:
+    - name: Перезапуск PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+- name: Download and Extract MediaWiki and Rename Directory
+  hosts: vm_3, vm_4
+  tasks:
+    - name: Ensure /var/www/ directory exists
+      file:
+        path: /var/www/
+        state: directory
+        mode: '0755'
+
+    - name: Download mediawiki-1.42.1.tar.gz
+      get_url:
+        url: https://releases.wikimedia.org/mediawiki/1.42/mediawiki-1.42.1.tar.gz
+        dest: /tmp/mediawiki-1.42.1.tar.gz
+
+    - name: Extract mediawiki-1.42.1.tar.gz to /var/www/mediawiki
+      unarchive:
+        src: /tmp/mediawiki-1.42.1.tar.gz
+        dest: /var/www/
+        remote_src: yes
+
+    - name: Rename directory mediawiki-1.42.1 to mediawiki
+      shell: mv /var/www/mediawiki-1.42.1 /var/www/mediawiki
+          #- name: Download and Extract MediaWiki
+          #  hosts: vm_3, vm_4
+          #  tasks:
+          #    - name: Download mediawiki-1.42.1.tar.gz
+          #      get_url:
+          #        url: https://releases.wikimedia.org/mediawiki/1.42/mediawiki-1.42.1.tar.gz
+          #        dest: /tmp/mediawiki-1.42.1.tar.gz
+          #
+          #    - name: Extract mediawiki-1.42.1.tar.gz
+          #      unarchive:
+          #        src: /tmp/mediawiki-1.42.1.tar.gz
+          #        dest: /var/www/
+          #        remote_src: yes
+          #
+          #- name: Переместить каталог, если он ещё не перемещён
+          #  hosts: vm_3, vm_4
+          #  tasks:
+          #    - name: Проверка существования каталога в месте назначения
+          #      stat:
+          #        path: /var/www/mediawiki
+          #      register: dest_exists
+          #
+          #- name: Выполнение перемещения каталога
+          #  file:
+          #    src: /var/www/mediawiki-1.42.1
+          #    dest: /var/www/mediawiki
+          #    state: link
+          #  when: not dest_exists.stat.exists
+
+
+- name: Создание конфига nginx-mediawiki
+  hosts: vm_3, vm_4
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/mediawiki
+        dest: /etc/nginx/sites-available/mediawiki
+
+
+- name: Создать символьную ссылку
+  hosts: vm_3, vm_4
+  become: true
+  tasks:
+    - name: Создание символьной ссылки
+      file:
+        src: /etc/nginx/sites-available/mediawiki
+        dest: /etc/nginx/sites-enabled/mediawiki
+        state: link
+
+- name: Удалить файл
+  hosts: vm_3, vm_4
+  become: true
+  tasks:
+    - name: Удаление файла
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+          
+- name: Перезапустить nginx
+  hosts: vm_3, vm_4
+  become: true
+  tasks:
+    - name: Перезапуск nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+
+- name: Замена конфига nginx proxy
+  hosts: vm_1
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/nginxproxy.conf
+        dest: /etc/nginx/nginx.conf
+
+- name: собрать внешний айпи для vm_3
+  hosts: vm_3
+  become: yes
+  tasks:
+    - name: Получить внешний IP-адрес
+      shell: curl -s https://api.ipify.org
+      register: ip_address
+
+    - name: записать полученный айпи в файл hosts
+      delegate_to: localhost
+      ansible.builtin.lineinfile:
+        path: /home/shukinyure/ansible/hosts
+        line: "192.168.10.8 {{ ip_address.stdout }}"  # Для vm_3
+
+- name: собрать внешний айпи для vm_4
+  hosts: vm_4
+  become: yes
+  tasks:
+    - name: Получить внешний IP-адрес
+      shell: curl -s https://api.ipify.org
+      register: ip_address1
+
+    - name: записать полученный айпи в файл hosts
+      delegate_to: localhost
+      ansible.builtin.lineinfile:
+        path: /home/shukinyure/ansible/hosts
+        line: "192.168.10.4 {{ ip_address1.stdout }}"  # Для vm_4
+
+- name: Замена etc/hosts
+  hosts: vm_1
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/hosts
+        dest: /etc/hosts
+
+- name: Перезапустить nginx
+  hosts: vm_1
+  become: true
+  tasks:
+    - name: Перезапуск nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+          #
+          #- name: Download and Extract zabbix
+          #  hosts: vm_3
+          #  tasks:
+          #    - name: Download zabbix
+          #      get_url:
+          #        url: https://repo.zabbix.com/zabbix/7.4/release/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest_7.4+ubuntu22.04_all.deb
+          #        dest: /home/zabbix-release_latest_7.4+ubuntu22.04_all.deb
+          #
+          #- name: Install Zabbix package
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Inspect Zabbix package
+          #      command: dpkg -i /home/zabbix-release_latest_7.4+ubuntu22.04_all.deb
+          #      args:
+          #        creates: /etc/zabbix/zabbix_server.conf
+          #
+          #- name: Update and upgrade packages on the system
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Run apt update
+          #      ansible.builtin.apt:
+          #        update_cache: yes
+          #
+          #- name: установка сопутствующих пакетов
+          #  hosts: vm_3
+          #  tasks:
+          #    - name: Ensure packets is installed
+          #      ansible.builtin.package:
+          #        name:
+          #          - zabbix-server-pgsql
+          #          - zabbix-frontend-php
+          #          - php8.1-pgsql
+          #          - zabbix-nginx-conf
+          #          - zabbix-sql-scripts
+          #          - acl
+          #          - postgresql
+          #        state: present
+          #
+          #- name: postgresql Playbook
+          #  hosts: vm_3
+          #  become: true
+          #  vars:
+          #    db_user: zabbix
+          #    db_password: 35795147
+          #    db_name: zabbix
+          #  tasks:
+          #    - name: Utility present
+          #      ansible.builtin.package:
+          #        name: python3-psycopg2
+          #        state: present
+          #    - name: Create db user
+          #      community.postgresql.postgresql_user:
+          #        state: present
+          #        name: "{{ db_user }}"
+          #        password: "{{ db_password }}"
+          #      become: true
+          #      become_user: postgres
+          #
+          #    - name: Create db
+          #      community.postgresql.postgresql_db:
+          #        state: present
+          #        name: "{{ db_name }}"
+          #      become: true
+          #      become_user: postgres
+          #
+          #    - name: "Grant db user access to app db"
+          #      postgresql_privs:
+          #        type: database
+          #        database: "{{ db_name }}"
+          #        roles: "{{ db_user }}"
+          #        grant_option: no
+          #        privs: all
+          #      become: yes
+          #      become_user: postgres
+          #
+          #- name: Перезапустить PostgreSQL
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Перезапуск PostgreSQL
+          #      ansible.builtin.service:
+          #        name: postgresql
+          #        state: restarted
+          #
+          #- name: Import Zabbix SQL schema
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Execute SQL import command
+          #      shell: zcat /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz | sudo -u zabbix psql zabbix
+          #
+          #
+          #- name: Замена конфига nginx zabbix
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Copy file to remote host
+          #      copy:
+          #        src: /home/shukinyure/ansible/zabbixnginx.conf
+          #        dest: /etc/zabbix/nginx.conf
+          #
+          #
+          #- name: Замена конфига nginx zabbix
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Copy file to remote host
+          #      copy:
+          #        src: /home/shukinyure/ansible/zabbix_server.conf
+          #        dest: /etc/zabbix/zabbix_server.conf
+          #
+          #- name: Перезапустить Zabbix PHP
+          #  hosts: vm_3
+          #  become: true
+          #  tasks:
+          #    - name: Перезапуск Zabbix-server
+          #      ansible.builtin.service:
+          #        name: zabbix-server
+          #        state: restarted
+          #
+          #    - name: Перезапуск PHP8.1
+          #      ansible.builtin.service:
+          #        name: php8.1-fpm
+          #        state: restarted
+          #
+          #    - name: Перезапуск nginx
+          #      ansible.builtin.service:
+          #        name: nginx
+          #        state: restarted
