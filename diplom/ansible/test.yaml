@@ -1,0 +1,65 @@
+---
+- name: Install python3-pip, ACL
+  hosts: vm_2
+  tasks:
+    - name: Ensure PostgreSQL is installed
+      ansible.builtin.package:
+        name:
+          - python3-pip
+          - acl
+        state: present
+
+- name: Copy конфигурационного файла zabbix on vm_2
+  hosts: vm_2
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/zabbix_server.conf
+        dest: /etc/zabbix/
+
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/nginx.conf
+        dest: /etc/zabbix/
+    
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/zabbix.conf.php
+        dest: /etc/zabbix/web/
+
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/pg_hbazabbix.conf
+        dest: /etc/postgresql/14/main/pg_hba.conf
+
+- name: Перезапустить PostgreSQL
+  hosts: vm_2 
+  become: true
+  tasks:
+    - name: Перезапуск PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+- name: Copy dump zabbix to vm_2
+  hosts: vm_2
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/zabbixdump.sql
+        dest: /var/lib/postgresql/
+
+- name: Restore PostgreSQL database on vm_2
+  hosts: vm_2
+  tasks:
+    - name: Restore database
+      become: true
+      community.postgresql.postgresql_db:
+        name: zabbix
+        state: restore
+        db: zabbix
+        target: /var/lib/postgresql/zabbixdump.sql
+        login_user: zabbix
+        login_password: 35795147

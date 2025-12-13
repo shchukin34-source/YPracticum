@@ -1,0 +1,22 @@
+---
+- name: Copy dump mediawiki to vm_5
+  hosts: vm_5
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/mywikidump.sql
+        dest: /var/lib/postgresql/
+
+- name: Restore PostgreSQL database on vm_5
+  hosts: vm_5
+  tasks:
+    - name: Restore database
+      become: true
+      community.postgresql.postgresql_db:
+        name: my_wiki
+        state: restore
+        db: my_wiki
+        target: /var/lib/postgresql/mywikidump.sql
+        login_user: wikiuser
+        login_password: 35795147

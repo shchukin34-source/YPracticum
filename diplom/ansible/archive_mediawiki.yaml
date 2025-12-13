@@ -1,0 +1,114 @@
+---
+- name: Copy script auto_archive and add to crontab
+  hosts: vm_3
+  vars:
+    script_name: backup_script.sh
+    cron_schedule: "0 0 * * *"  # Каждый день в 0:00
+  tasks:
+    - name: Copy script auto_archive to vm_3
+      ansible.builtin.copy:
+        src: "/home/shukinyure/ansible/{{ script_name }}"
+        dest: "/home/ubuntu/{{ script_name }}"
+        mode: '0755'
+    - name: Make script executable
+      ansible.builtin.file:
+        path: "/home/ubuntu/{{ script_name }}"
+        mode: '0755'
+    
+    - name: Add script auto_archive to crontab
+      ansible.builtin.cron:
+        name: "Run backup_script every day"
+        minute: "{{ cron_schedule.split(' ')[0] }}"
+        hour: "{{ cron_schedule.split(' ')[1] }}"
+        day: "{{ cron_schedule.split(' ')[2] }}"
+        month: "{{ cron_schedule.split(' ')[3] }}"
+        weekday: "{{ cron_schedule.split(' ')[4] }}"
+        job: "/home/ubuntu/{{ script_name }}"
+        user: ubuntu
+
+- name: Generate SSH key and copy to vm_4
+  hosts: vm_3
+  tasks:
+    - name: Check if SSH key already exists
+      become: yes
+      stat:
+        path: /home/ubuntu/.ssh/id_ed25519
+      register: key_exists
+
+    - name: Generate ED25519 SSH key
+      become: yes
+      command: ssh-keygen -t ed25519 -f /home/ubuntu/.ssh/id_ed25519 -N ''
+      when: not key_exists.stat.exists
+
+    - name: Change ownership of .ssh directory
+      become: yes
+      command: chown -R ubuntu:ubuntu /home/ubuntu/.ssh/
+
+    - name: Read the public key file
+      become: yes
+      shell: cat /home/ubuntu/.ssh/id_ed25519.pub
+      register: public_key_content
+
+    - name: Copy public key content to authorized_keys on vm_4
+      delegate_to: vm_4
+      become: yes
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.ssh/authorized_keys
+        line: "{{ public_key_content.stdout }}"
+
+- name: Copy script pg_dump and add to crontab
+  hosts: vm_5
+  vars:
+    script_name: backup_script1.sh
+    cron_schedule: "0 0 * * *"  # Каждый день в 0:00
+  tasks:
+    - name: Copy script pg_dump to vm_5
+      ansible.builtin.copy:
+        src: "/home/shukinyure/ansible/{{ script_name }}"
+        dest: "/home/ubuntu/{{ script_name }}"
+        mode: '0755'
+    - name: Make script executable
+      ansible.builtin.file:
+        path: "/home/ubuntu/{{ script_name }}"
+        mode: '0755'
+    
+    - name: Add script to crontab
+      ansible.builtin.cron:
+        name: "Run backup_script every day"
+        minute: "{{ cron_schedule.split(' ')[0] }}"
+        hour: "{{ cron_schedule.split(' ')[1] }}"
+        day: "{{ cron_schedule.split(' ')[2] }}"
+        month: "{{ cron_schedule.split(' ')[3] }}"
+        weekday: "{{ cron_schedule.split(' ')[4] }}"
+        job: "/home/ubuntu/{{ script_name }}"
+        user: ubuntu
+
+- name: Generate SSH key and copy to vm_6
+  hosts: vm_5
+  tasks:
+    - name: Check if SSH key already exists
+      become: yes
+      stat:
+        path: /home/ubuntu/.ssh/id_ed25519
+      register: key_exists
+
+    - name: Generate ED25519 SSH key
+      become: yes
+      command: ssh-keygen -t ed25519 -f /home/ubuntu/.ssh/id_ed25519 -N ''
+      when: not key_exists.stat.exists
+
+    - name: Change ownership of .ssh directory
+      become: yes
+      command: chown -R ubuntu:ubuntu /home/ubuntu/.ssh/
+
+    - name: Read the public key file
+      become: yes
+      shell: cat /home/ubuntu/.ssh/id_ed25519.pub
+      register: public_key_content
+
+    - name: Copy public key content to authorized_keys on vm_6
+      delegate_to: vm_6
+      become: yes
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.ssh/authorized_keys
+        line: "{{ public_key_content.stdout }}"

@@ -1,0 +1,124 @@
+---
+- name: Замена метода аутентифицкации в pgsql
+  hosts: vm_4, vm_5, vm_6
+  become: true
+  tasks:
+    - name: Copy file to remote host
+      copy:
+        src: /home/shukinyure/ansible/pg_hba.conf
+        dest: /etc/postgresql/14/main/pg_hba.conf
+
+- name: Перезапустить PostgreSQL
+  hosts: vm_4, vm_5, vm_6
+  become: true
+  tasks:
+    - name: Перезапуск PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+- name: Backup PostgreSQL database on vm_4
+  hosts: vm_4
+  tasks:
+    - name: Ensure directory exists
+      file:
+        path: /home/ubuntu/
+        state: directory
+        mode: '0755'
+
+    - name: Dump PostgreSQL database
+      become: true
+      community.postgresql.postgresql_db:
+        name: my_wiki
+        state: dump
+        target: /home/ubuntu/mywikidump.sql
+        login_user: wikiuser
+        login_password: 35795147
+
+- name: Transfer file from vm_4 to vm_5, vm_6
+  hosts: vm_4
+  tasks:
+    - name: Fetch file
+      fetch:
+        src: /home/ubuntu/mywikidump.sql
+        dest: /tmp/
+
+- name: Copy file to vm_5, vm_6
+  hosts: vm_5, vm_6
+  vars:
+    ansible_remote_src: yes
+  tasks:
+    - name: Copy fetched file
+      copy:  
+        src: /tmp/vm_4/home/ubuntu/mywikidump.sql
+        dest: /home/ubuntu/
+
+- name: Restore PostgreSQL database on vm_5, vm_6
+  hosts: vm_5, vm_6
+  tasks:
+    - name: Restore database
+      become: true
+      community.postgresql.postgresql_db:
+        name: my_wiki
+        state: restore
+        db: my_wiki
+        target: /home/ubuntu/mywikidump.sql
+        login_user: wikiuser
+        login_password: 35795147
+
+- name: Fetch LocalSettings.php from vm_4 and deploy to vm_5, vm_6
+  hosts: localhost
+  gather_facts: false
+  vars:
+    src_host: vm_4           # inventory name of source host
+    src_path: /var/www/mediawiki/LocalSettings.php
+    dest_hosts: ['vm_5', 'vm_6']  # inventory names of destination hosts
+    dest_path: /var/www/mediawiki/LocalSettings.php
+    dest_owner: www-data
+    dest_group: www-data
+    dest_mode: "0600"
+    tmp_local_path: /tmp/LocalSettings.php
+
+  tasks:
+    - name: Ensure tmp dir exists
+      file:
+        path: /tmp
+        state: directory
+
+    - name: Fetch LocalSettings.php from src host to controller
+      fetch:
+        src: "{{ src_path }}"
+        dest: "{{ tmp_local_path }}"
+        flat: yes
+      delegate_to: "{{ src_host }}"
+      become: true   # use if need sudo to read file on src host
+
+    - name: Copy LocalSettings.php from controller to dest hosts
+      copy:
+        src: "{{ tmp_local_path }}"
+        dest: "{{ dest_path }}"
+        owner: "{{ dest_owner }}"
+        group: "{{ dest_group }}"
+        mode: "{{ dest_mode }}"
+      delegate_to: "{{ item }}"
+      loop: "{{ dest_hosts }}"
+      become: true   # use if need sudo to write file on dest host
+
+    - name: Remove temporary file from controller
+      file:
+        path: "{{ tmp_local_path }}"
+        state: absent
+
+- name: Установить wgServer = 'http://mediawiki'
+  hosts: vm_5, vm_6
+  become: yes
+  tasks:
+    - name: Получить внешний IP-адрес
+      shell: curl -s https://api.ipify.org
+      register: ip_address
+
+    - name: Установить wgServer с полученным IP-адресом
+      ansible.builtin.replace:
+        path: /var/www/mediawiki/LocalSettings.php
+        regexp: "(\\$wgServer\\s*=\\s*)'[^']*'\\s*;"
+        replace: "\\1'http://{{ ip_address.stdout }}';"
